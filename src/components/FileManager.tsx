@@ -1,10 +1,33 @@
-import { Fragment, useCallback, useEffect, useState } from "react";
-import { Button, Space, Spin, Table, Tag, Toast } from "@douyinfe/semi-ui";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Box,
+  Breadcrumbs,
+  Button,
+  Chip,
+  LinearProgress,
+  Paper,
+  Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import DescriptionIcon from "@mui/icons-material/Description";
+import FolderIcon from "@mui/icons-material/Folder";
+import LinkIcon from "@mui/icons-material/Link";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { listDir } from "../api";
-import type { FileEntry } from "../types";
+import type { FileEntry, NotifyFn } from "../types";
 
 interface Props {
   serial: string;
+  path: string;
+  onNavigate: (path: string) => void;
+  onNotify: NotifyFn;
 }
 
 function joinPath(parent: string, name: string): string {
@@ -31,8 +54,7 @@ function formatSize(bytes: number): string {
   return `${v.toFixed(1)} ${units[i]}`;
 }
 
-export default function FileManager({ serial }: Props) {
-  const [path, setPath] = useState("/");
+export default function FileManager({ serial, path, onNavigate, onNotify }: Props) {
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -48,20 +70,20 @@ export default function FileManager({ serial }: Props) {
         });
         setEntries(sorted);
       } catch (e) {
-        Toast.error(String(e));
+        onNotify(String(e), "error");
       } finally {
         setLoading(false);
       }
     },
-    [serial],
+    [serial, onNotify],
   );
 
   useEffect(() => {
     load(path);
   }, [path, load]);
 
-  const enter = (name: string) => setPath(joinPath(path, name));
-  const goUp = () => path !== "/" && setPath(parentPath(path));
+  const enter = (name: string) => onNavigate(joinPath(path, name));
+  const goUp = () => path !== "/" && onNavigate(parentPath(path));
 
   // 面包屑
   const segs = path === "/" ? [] : path.split("/").filter(Boolean);
@@ -72,65 +94,81 @@ export default function FileManager({ serial }: Props) {
     crumbs.push({ label: s, path: acc });
   });
 
-  const columns = [
-    {
-      title: "名称",
-      dataIndex: "name",
-      render: (_t: unknown, r: FileEntry) => (
-        <Space>
-          <span>{r.is_dir ? "📁" : r.is_symlink ? "🔗" : "📄"}</span>
-          <span>{r.name}</span>
-          {r.is_symlink && r.target && <Tag size="small">→ {r.target}</Tag>}
-        </Space>
-      ),
-    },
-    { title: "权限", dataIndex: "perms", width: 120 },
-    {
-      title: "大小",
-      dataIndex: "size",
-      width: 100,
-      render: (v: number, r: FileEntry) => (r.is_dir ? "—" : formatSize(v)),
-    },
-    { title: "修改时间", dataIndex: "modified", width: 180 },
-  ];
-
   return (
-    <div>
-      <div className="breadcrumb">
-        <span className="crumb" onClick={() => setPath("/")}>
+    <Box>
+      <Breadcrumbs separator="/" sx={{ mb: 1 }}>
+        <Button variant="text" size="small" sx={{ minWidth: 0, p: 0 }} onClick={() => onNavigate("/")}>
           根目录
-        </span>
-        {crumbs.map((c) => (
-          <Fragment key={c.path}>
-            <span className="sep">/</span>
-            <span className="crumb" onClick={() => setPath(c.path)}>
-              {c.label}
-            </span>
-          </Fragment>
-        ))}
-      </div>
-
-      <Space style={{ marginBottom: 12 }}>
-        <Button onClick={goUp} disabled={path === "/"}>
-          ⬆ 上级
         </Button>
-        <Button onClick={() => load(path)}>刷新</Button>
-        <span style={{ color: "var(--semi-color-text-2)", fontSize: 13 }}>{path}</span>
-      </Space>
+        {crumbs.map((c) => (
+          <Button key={c.path} variant="text" size="small" sx={{ minWidth: 0, p: 0 }} onClick={() => onNavigate(c.path)}>
+            {c.label}
+          </Button>
+        ))}
+      </Breadcrumbs>
 
-      <Spin spinning={loading}>
-        <Table
-          size="small"
-          columns={columns}
-          dataSource={entries}
-          rowKey="name"
-          pagination={false}
-          onRow={(record) => ({
-            onClick: () => record?.is_dir && enter(record.name),
-            style: { cursor: record?.is_dir ? "pointer" : "default" },
-          })}
-        />
-      </Spin>
-    </div>
+      <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: "center" }}>
+        <Button size="small" variant="outlined" startIcon={<ArrowUpwardIcon />} onClick={goUp} disabled={path === "/"}>
+          上级
+        </Button>
+        <Button size="small" variant="outlined" startIcon={<RefreshIcon />} onClick={() => load(path)}>
+          刷新
+        </Button>
+        <Typography variant="body2" color="text.secondary" noWrap sx={{ flex: 1 }}>
+          {path}
+        </Typography>
+      </Stack>
+
+      {loading && <LinearProgress sx={{ mb: 1 }} />}
+
+      <TableContainer component={Paper} variant="outlined">
+        <Table size="small" stickyHeader>
+          <TableHead>
+            <TableRow>
+              <TableCell>名称</TableCell>
+              <TableCell sx={{ width: 120 }}>权限</TableCell>
+              <TableCell sx={{ width: 100 }} align="right">
+                大小
+              </TableCell>
+              <TableCell sx={{ width: 180 }}>修改时间</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {entries.map((r) => (
+              <TableRow
+                key={r.name}
+                hover={r.is_dir}
+                onClick={() => r.is_dir && enter(r.name)}
+                sx={{ cursor: r.is_dir ? "pointer" : "default" }}
+              >
+                <TableCell>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                    {r.is_dir ? (
+                      <FolderIcon color="warning" fontSize="small" />
+                    ) : r.is_symlink ? (
+                      <LinkIcon color="action" fontSize="small" />
+                    ) : (
+                      <DescriptionIcon color="action" fontSize="small" />
+                    )}
+                    <span>{r.name}</span>
+                    {r.is_symlink && r.target && <Chip size="small" label={`→ ${r.target}`} />}
+                  </Stack>
+                </TableCell>
+                <TableCell>{r.perms}</TableCell>
+                <TableCell align="right">{r.is_dir ? "—" : formatSize(r.size)}</TableCell>
+                <TableCell>{r.modified}</TableCell>
+              </TableRow>
+            ))}
+            {entries.length === 0 && !loading && (
+              <TableRow>
+                <TableCell colSpan={4} align="center" sx={{ color: "text.secondary", py: 4 }}>
+                  空目录
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Box>
   );
 }

@@ -88,3 +88,21 @@ pub async fn run_adb_raw(args: &[String]) -> AppResult<Vec<u8>> {
     }
     Ok(out.stdout)
 }
+
+/// 执行 adb 命令并返回 stdout + stderr 的合并文本，不因非零退出码报错。
+///
+/// 用于自定义命令：用户可能执行会返回非零但仍产生输出的命令，
+/// 这里把两份输出都交还给前端展示。
+pub async fn run_adb_combined(args: &[String]) -> AppResult<String> {
+    let adb = adb_path()?;
+    let out = output_with_timeout(&adb, args).await?;
+    let mut s = String::from_utf8_lossy(&out.stdout).into_owned();
+    let err = String::from_utf8_lossy(&out.stderr);
+    if !err.trim().is_empty() {
+        if !s.is_empty() && !s.ends_with('\n') {
+            s.push('\n');
+        }
+        s.push_str(&err);
+    }
+    Ok(s)
+}

@@ -1,7 +1,25 @@
+export type NotifyFn = (
+  message: string,
+  severity?: "success" | "info" | "warning" | "error",
+) => void;
+
 export interface Device {
   serial: string;
   state: string;
   model: string;
+}
+
+export interface CustomCommand {
+  name: string;
+  command: string;
+}
+
+export interface SavedFile {
+  name: string;
+  dir: string;
+  path: string;
+  kind: string;
+  time: number;
 }
 
 export interface FileEntry {
